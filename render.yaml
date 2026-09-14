@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: c-exam-backend
+    runtime: docker
+    plan: free
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    healthCheckPath: /api/health
+    envVars:
+      - key: PORT
+        value: 4000
