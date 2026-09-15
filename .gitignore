@@ -1,5 +1,6 @@
 node_modules/
 sandbox_tmp/
 dist/
+dist.zip
 .env
 *.log
