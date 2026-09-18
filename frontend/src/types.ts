@@ -15,6 +15,36 @@ export interface Question {
   sampleTests: SampleTest[];
 }
 
+// A quiz-format question: pick one of 4 options, no code editor or compiler
+// involved. correctIndex is intentionally absent here — it's checked only by
+// the backend (POST /api/mcq/:id/submit) and never sent to the frontend.
+export interface McqQuestion {
+  id: number;
+  section: string;
+  type: 'mcq';
+  topic: string;
+  question: string;
+  options: string[];
+}
+
+// What GET /api/questions actually returns: a mix of coding questions (no
+// `type` field) and MCQ questions (`type: 'mcq'`). App.tsx groups these by
+// `section` and picks Exam vs McqExam per section based on this discriminant.
+export type AnyQuestion = Question | McqQuestion;
+
+export function isMcqQuestion(q: AnyQuestion): q is McqQuestion {
+  return (q as McqQuestion).type === 'mcq';
+}
+
+export interface McqSubmitResponse {
+  questionId: number;
+  studentId: string;
+  selectedIndex: number;
+  correctIndex: number;
+  correct: boolean;
+  submittedAt: string;
+}
+
 export interface CompileResult {
   success: boolean;
   output: string; // gcc stderr (warnings, or the full error block on failure)

@@ -9455,12 +9455,18 @@ const questions = [
   }
 ];
 
+// Calculus MCQ (ids 206-255): a third, independent section — quiz format, no
+// code/gcc involved. See mcqQuestions.js. correctIndex is stripped below and
+// only ever checked server-side (POST /api/mcq/:id/submit).
+const { mcqQuestions } = require('./mcqQuestions');
+const allQuestions = [...questions, ...mcqQuestions];
+
 function getPublicQuestions() {
-  return questions.map(({ hiddenTests, ...rest }) => rest);
+  return allQuestions.map(({ hiddenTests, correctIndex, ...rest }) => rest);
 }
 
 function getQuestionById(id) {
-  return questions.find((q) => q.id === Number(id));
+  return allQuestions.find((q) => q.id === Number(id));
 }
 
-module.exports = { questions, getPublicQuestions, getQuestionById };
+module.exports = { questions: allQuestions, getPublicQuestions, getQuestionById };

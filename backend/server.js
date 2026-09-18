@@ -17,6 +17,7 @@ app.use(express.json({ limit: '1mb' }));
 // In-memory submission store, keyed by "studentId:questionId". Fine for a
 // local single-process exam demo; swap for a real DB for multi-user/deployed use.
 const submissions = new Map();
+const mcqSubmissions = new Map();
 
 app.get('/api/health', (req, res) => {
   res.json({ ok: true, gcc: GCC_PATH });
@@ -46,6 +47,7 @@ app.post('/api/run', async (req, res) => {
 app.post('/api/questions/:id/run-samples', async (req, res) => {
   const question = getQuestionById(req.params.id);
   if (!question) return res.status(404).json({ error: 'Unknown question id' });
+  if (question.type === 'mcq') return res.status(400).json({ error: 'This is an MCQ question; use /api/mcq/:id/submit' });
   const { code } = req.body || {};
   if (typeof code !== 'string' || !code.trim()) {
     return res.status(400).json({ error: 'code is required' });
@@ -110,6 +112,7 @@ app.post('/api/questions/:id/run-samples', async (req, res) => {
 app.post('/api/questions/:id/submit', async (req, res) => {
   const question = getQuestionById(req.params.id);
   if (!question) return res.status(404).json({ error: 'Unknown question id' });
+  if (question.type === 'mcq') return res.status(400).json({ error: 'This is an MCQ question; use /api/mcq/:id/submit' });
   const { code, studentId } = req.body || {};
   if (typeof code !== 'string' || !code.trim()) {
     return res.status(400).json({ error: 'code is required' });
@@ -184,6 +187,41 @@ app.post('/api/questions/:id/submit', async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: 'Internal sandbox error', detail: err.message });
   }
+});
+
+// MCQ submit: no compilation involved — just checks the selected option
+// against the correct answer (kept server-side, never sent to the frontend)
+// and prevents duplicate submission, same discipline as the coding Submit.
+app.post('/api/mcq/:id/submit', (req, res) => {
+  const question = getQuestionById(req.params.id);
+  if (!question) return res.status(404).json({ error: 'Unknown question id' });
+  if (question.type !== 'mcq') return res.status(400).json({ error: 'This is not an MCQ question' });
+
+  const { selectedIndex, studentId } = req.body || {};
+  if (typeof selectedIndex !== 'number' || selectedIndex < 0 || selectedIndex > 3) {
+    return res.status(400).json({ error: 'selectedIndex (0-3) is required' });
+  }
+
+  const key = `${studentId || 'anonymous'}:${question.id}`;
+  if (mcqSubmissions.has(key)) {
+    return res.status(409).json({
+      error: 'ALREADY_SUBMITTED',
+      message: 'This question has already been submitted.',
+      previous: mcqSubmissions.get(key),
+    });
+  }
+
+  const correct = selectedIndex === question.correctIndex;
+  const record = {
+    questionId: question.id,
+    studentId: studentId || 'anonymous',
+    selectedIndex,
+    correctIndex: question.correctIndex,
+    correct,
+    submittedAt: new Date().toISOString(),
+  };
+  mcqSubmissions.set(key, record);
+  res.json(record);
 });
 
 app.listen(PORT, () => {

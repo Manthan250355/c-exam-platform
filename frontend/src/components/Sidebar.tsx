@@ -1,8 +1,9 @@
-import type { Question, QuestionStatus } from '../types';
+import type { AnyQuestion, QuestionStatus } from '../types';
+import { isMcqQuestion } from '../types';
 import { CheckIcon, CrossIcon } from './Icons';
 
 interface SidebarProps {
-  questions: Question[];
+  questions: AnyQuestion[];
   currentIndex: number;
   statusByQuestionId: Record<number, QuestionStatus>;
   onSelect: (index: number) => void;
@@ -55,7 +56,7 @@ export default function Sidebar({ questions, currentIndex, statusByQuestionId, o
               className={`q-nav-item ${isActive ? 'q-nav-item-active' : ''} q-status-${status}`}
               onClick={() => !locked && onSelect(idx)}
               disabled={locked}
-              title={q.title}
+              title={isMcqQuestion(q) ? q.topic : q.title}
             >
               <span className="q-nav-number">{idx + 1}</span>
               {badgeForStatus(status)}

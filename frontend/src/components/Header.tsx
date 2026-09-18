@@ -15,9 +15,10 @@ interface HeaderProps {
   fullscreenExitCount: number;
   connectionOk: boolean;
   attemptedCount: number;
-  fontSize: number;
-  onFontSizeChange: (n: number) => void;
+  fontSize?: number;
+  onFontSizeChange?: (n: number) => void;
   onHome: () => void;
+  showFontSize?: boolean;
 }
 
 export default function Header({
@@ -35,6 +36,7 @@ export default function Header({
   fontSize,
   onFontSizeChange,
   onHome,
+  showFontSize = true,
 }: HeaderProps) {
   return (
     <header className="exam-header">
@@ -78,19 +80,21 @@ export default function Header({
       </div>
 
       <div className="header-right">
-        <div className="font-size-control">
-          <span className="font-size-label">Font Size</span>
-          <input
-            type="range"
-            min={10}
-            max={24}
-            step={1}
-            value={fontSize}
-            onChange={(e) => onFontSizeChange(Number(e.target.value))}
-            aria-label="Editor font size"
-          />
-          <span className="font-size-value">{fontSize}px</span>
-        </div>
+        {showFontSize && (
+          <div className="font-size-control">
+            <span className="font-size-label">Font Size</span>
+            <input
+              type="range"
+              min={10}
+              max={24}
+              step={1}
+              value={fontSize}
+              onChange={(e) => onFontSizeChange?.(Number(e.target.value))}
+              aria-label="Editor font size"
+            />
+            <span className="font-size-value">{fontSize}px</span>
+          </div>
+        )}
         <button className="icon-btn" title="Home" onClick={onHome} type="button">
           <HomeIcon size={18} />
         </button>

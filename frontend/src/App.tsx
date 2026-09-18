@@ -1,17 +1,20 @@
 import { useEffect, useMemo, useState } from 'react';
 import Exam from './Exam';
+import McqExam from './McqExam';
 import { fetchQuestions } from './api';
-import type { Question } from './types';
+import { isMcqQuestion } from './types';
+import type { AnyQuestion, McqQuestion, Question } from './types';
 import './App.css';
 
 export default function App() {
-  const [questions, setQuestions] = useState<Question[]>([]);
+  const [questions, setQuestions] = useState<AnyQuestion[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [selectedSection, setSelectedSection] = useState<string | null>(null);
 
   // Load the full question bank from the backend once. It may span multiple
-  // independent sections (e.g. Sec-A, Sec-B) — each is its own self-contained
-  // exam with its own timer and attempt tracking, never mixed together.
+  // independent sections (e.g. Sec-A, Sec-B, Calculus MCQ) — each is its own
+  // self-contained exam with its own timer and attempt tracking, never mixed
+  // together. A section's `type` (coding vs mcq) decides which exam UI it gets.
   useEffect(() => {
     fetchQuestions()
       .then(setQuestions)
@@ -19,12 +22,16 @@ export default function App() {
   }, []);
 
   const sections = useMemo(() => {
-    const bySection = new Map<string, Question[]>();
+    const bySection = new Map<string, AnyQuestion[]>();
     questions.forEach((q) => {
       if (!bySection.has(q.section)) bySection.set(q.section, []);
       bySection.get(q.section)!.push(q);
     });
-    return Array.from(bySection.entries()).map(([name, qs]) => ({ name, questions: qs }));
+    return Array.from(bySection.entries()).map(([name, qs]) => ({
+      name,
+      questions: qs,
+      isMcq: isMcqQuestion(qs[0]),
+    }));
   }, [questions]);
 
   if (loadError) {
@@ -41,14 +48,22 @@ export default function App() {
     return <div className="loading-screen">Loading exam…</div>;
   }
 
+  function renderSection(s: { name: string; questions: AnyQuestion[]; isMcq: boolean }) {
+    return s.isMcq ? (
+      <McqExam key={s.name} questions={s.questions as McqQuestion[]} />
+    ) : (
+      <Exam key={s.name} questions={s.questions as Question[]} />
+    );
+  }
+
   // Single-section banks skip the picker entirely — same behavior as before.
   if (sections.length === 1) {
-    return <Exam questions={sections[0].questions} />;
+    return renderSection(sections[0]);
   }
 
   const chosen = sections.find((s) => s.name === selectedSection);
   if (chosen) {
-    return <Exam key={chosen.name} questions={chosen.questions} />;
+    return renderSection(chosen);
   }
 
   return (
@@ -71,7 +86,10 @@ export default function App() {
               className="section-picker-item"
               onClick={() => setSelectedSection(s.name)}
             >
-              <span className="section-picker-name">{s.name}</span>
+              <span className="section-picker-name">
+                {s.name}
+                {s.isMcq && <span className="section-picker-badge">MCQ</span>}
+              </span>
               <span className="section-picker-count">{s.questions.length} questions</span>
             </button>
           ))}
