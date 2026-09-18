@@ -16,8 +16,10 @@ export interface Question {
 }
 
 // A quiz-format question: pick one of 4 options, no code editor or compiler
-// involved. correctIndex is intentionally absent here — it's checked only by
-// the backend (POST /api/mcq/:id/submit) and never sent to the frontend.
+// involved. correctIndex is intentionally absent here — /api/questions never
+// sends it, so there's no way to reveal the answer by inspecting network
+// traffic while taking the exam. It's only available via the separate
+// Answer Key feed (GET /api/answer-key), which the student opens deliberately.
 export interface McqQuestion {
   id: number;
   section: string;
@@ -36,14 +38,9 @@ export function isMcqQuestion(q: AnyQuestion): q is McqQuestion {
   return (q as McqQuestion).type === 'mcq';
 }
 
-export interface McqSubmitResponse {
-  questionId: number;
-  studentId: string;
-  selectedIndex: number;
-  correctIndex: number;
-  correct: boolean;
-  submittedAt: string;
-}
+// What GET /api/answer-key returns: same shape as AnyQuestion, but MCQ
+// entries additionally carry correctIndex.
+export type AnswerKeyQuestion = AnyQuestion & { correctIndex?: number };
 
 export interface CompileResult {
   success: boolean;

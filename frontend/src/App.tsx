@@ -1,15 +1,18 @@
 import { useEffect, useMemo, useState } from 'react';
 import Exam from './Exam';
 import McqExam from './McqExam';
+import AnswerKeyView from './AnswerKeyView';
 import { fetchQuestions } from './api';
 import { isMcqQuestion } from './types';
 import type { AnyQuestion, McqQuestion, Question } from './types';
 import './App.css';
 
+type PickerChoice = string | 'answer-key' | null;
+
 export default function App() {
   const [questions, setQuestions] = useState<AnyQuestion[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [selectedSection, setSelectedSection] = useState<string | null>(null);
+  const [selected, setSelected] = useState<PickerChoice>(null);
 
   // Load the full question bank from the backend once. It may span multiple
   // independent sections (e.g. Sec-A, Sec-B, Calculus MCQ) — each is its own
@@ -56,12 +59,11 @@ export default function App() {
     );
   }
 
-  // Single-section banks skip the picker entirely — same behavior as before.
-  if (sections.length === 1) {
-    return renderSection(sections[0]);
+  if (selected === 'answer-key') {
+    return <AnswerKeyView onBack={() => setSelected(null)} />;
   }
 
-  const chosen = sections.find((s) => s.name === selectedSection);
+  const chosen = sections.find((s) => s.name === selected);
   if (chosen) {
     return renderSection(chosen);
   }
@@ -80,12 +82,7 @@ export default function App() {
         </p>
         <div className="section-picker-list">
           {sections.map((s) => (
-            <button
-              key={s.name}
-              type="button"
-              className="section-picker-item"
-              onClick={() => setSelectedSection(s.name)}
-            >
+            <button key={s.name} type="button" className="section-picker-item" onClick={() => setSelected(s.name)}>
               <span className="section-picker-name">
                 {s.name}
                 {s.isMcq && <span className="section-picker-badge">MCQ</span>}
@@ -93,6 +90,14 @@ export default function App() {
               <span className="section-picker-count">{s.questions.length} questions</span>
             </button>
           ))}
+          <button
+            type="button"
+            className="section-picker-item section-picker-item-key"
+            onClick={() => setSelected('answer-key')}
+          >
+            <span className="section-picker-name">Answer Key</span>
+            <span className="section-picker-count">all sections</span>
+          </button>
         </div>
       </div>
     </div>

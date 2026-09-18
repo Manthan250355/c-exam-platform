@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Header from './components/Header';
 import Sidebar from './components/Sidebar';
-import { checkHealth, submitMcqAnswer } from './api';
+import { checkHealth } from './api';
 import { useCountdown, formatHMS } from './useCountdown';
-import type { McqQuestion, McqSubmitResponse, QuestionStatus } from './types';
+import type { McqQuestion, QuestionStatus } from './types';
 
 const STUDENT_NAME = 'Tania Kataria';
 const STUDENT_ID = '2610992624';
@@ -11,8 +11,6 @@ const STUDENT_ID = '2610992624';
 // MCQs take far less time per question than a coding problem — 60s/question
 // is standard exam pacing for a single-concept multiple-choice question.
 const SECONDS_PER_QUESTION = 60;
-
-type ModalState = { mode: 'none' } | { mode: 'confirm' } | { mode: 'already' };
 
 export default function McqExam({ questions }: { questions: McqQuestion[] }) {
   const examDurationSeconds = questions.length * SECONDS_PER_QUESTION;
@@ -22,8 +20,10 @@ export default function McqExam({ questions }: { questions: McqQuestion[] }) {
   const [timesUpVisible, setTimesUpVisible] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(0);
 
+  // Selecting an option just records the pick — no correctness check happens
+  // here at all. The student compares against the separate Answer Key
+  // section themselves, same as marking a printed exam paper.
   const [selectedByQuestion, setSelectedByQuestion] = useState<Record<number, number>>({});
-  const [resultByQuestion, setResultByQuestion] = useState<Record<number, McqSubmitResponse>>({});
   const [statusByQuestionId, setStatusByQuestionId] = useState<Record<number, QuestionStatus>>(() => {
     const initial: Record<number, QuestionStatus> = {};
     questions.forEach((q) => { initial[q.id] = 'unattempted'; });
@@ -34,8 +34,6 @@ export default function McqExam({ questions }: { questions: McqQuestion[] }) {
   const [fullscreenExitCount, setFullscreenExitCount] = useState(0);
   const [fullscreenWarning, setFullscreenWarning] = useState(false);
   const [connectionOk, setConnectionOk] = useState(true);
-  const [modal, setModal] = useState<ModalState>({ mode: 'none' });
-  const [submitting, setSubmitting] = useState(false);
 
   const hasStartedFullscreenTracking = useRef(false);
 
@@ -77,16 +75,6 @@ export default function McqExam({ questions }: { questions: McqQuestion[] }) {
   const handleExpire = () => {
     setTestLocked(true);
     setTimesUpVisible(true);
-    // Best-effort auto-submit of anything already selected but not yet locked in.
-    questions.forEach((q) => {
-      if (!resultByQuestion[q.id] && selectedByQuestion[q.id] !== undefined) {
-        submitMcqAnswer(q.id, selectedByQuestion[q.id], STUDENT_ID)
-          .then((result) => setResultByQuestion((prev) => ({ ...prev, [q.id]: result })))
-          .catch(() => {
-            /* already submitted or unreachable */
-          });
-      }
-    });
   };
 
   const secondsLeft = useCountdown(examDurationSeconds, handleExpire, testStarted);
@@ -107,42 +95,9 @@ export default function McqExam({ questions }: { questions: McqQuestion[] }) {
   }
 
   function selectOption(optionIndex: number) {
-    if (!currentQuestion || testLocked || resultByQuestion[currentQuestion.id]) return;
+    if (!currentQuestion || testLocked) return;
     setSelectedByQuestion((prev) => ({ ...prev, [currentQuestion.id]: optionIndex }));
     setStatusByQuestionId((prev) => (prev[currentQuestion.id] === 'unattempted' ? { ...prev, [currentQuestion.id]: 'attempted' } : prev));
-  }
-
-  function openSubmitConfirm() {
-    if (!currentQuestion || testLocked) return;
-    if (resultByQuestion[currentQuestion.id]) {
-      setModal({ mode: 'already' });
-      return;
-    }
-    if (selectedByQuestion[currentQuestion.id] === undefined) return;
-    setModal({ mode: 'confirm' });
-  }
-
-  async function confirmSubmit() {
-    if (!currentQuestion) return;
-    const selectedIndex = selectedByQuestion[currentQuestion.id];
-    if (selectedIndex === undefined) return;
-    setSubmitting(true);
-    try {
-      const result = await submitMcqAnswer(currentQuestion.id, selectedIndex, STUDENT_ID);
-      setResultByQuestion((prev) => ({ ...prev, [currentQuestion.id]: result }));
-      setStatusByQuestionId((prev) => ({ ...prev, [currentQuestion.id]: result.correct ? 'correct' : 'wrong' }));
-      setModal({ mode: 'none' });
-    } catch (e: any) {
-      if (e.status === 409 && e.body?.previous) {
-        setResultByQuestion((prev) => ({ ...prev, [currentQuestion.id]: e.body.previous }));
-        setModal({ mode: 'already' });
-      } else {
-        alert(`Submission failed: ${e.message}`);
-        setModal({ mode: 'none' });
-      }
-    } finally {
-      setSubmitting(false);
-    }
   }
 
   function handleHome() {
@@ -183,8 +138,8 @@ export default function McqExam({ questions }: { questions: McqQuestion[] }) {
           </div>
           <p className="start-note">
             The exam will enter full-screen mode. Exiting full-screen during the test will be recorded as a warning.
-            The timer starts the moment you click Start and cannot be paused ({SECONDS_PER_QUESTION}s allotted per
-            question).
+            Selecting an option records your answer — it does not tell you whether it's correct. Check your answers
+            afterwards from the <strong>Answer Key</strong> on the question-set screen.
           </p>
           <button className="btn btn-submit start-btn" type="button" onClick={handleStart}>
             Enter Full Screen &amp; Start Test
@@ -194,9 +149,7 @@ export default function McqExam({ questions }: { questions: McqQuestion[] }) {
     );
   }
 
-  const result = resultByQuestion[currentQuestion.id];
   const selected = selectedByQuestion[currentQuestion.id];
-  const isLocked = !!result || testLocked;
 
   return (
     <div className="exam-root">
@@ -239,36 +192,19 @@ export default function McqExam({ questions }: { questions: McqQuestion[] }) {
             </h1>
 
             <div className="mcq-options">
-              {currentQuestion.options.map((opt, idx) => {
-                let cls = 'mcq-option';
-                if (isLocked && result) {
-                  if (idx === result.correctIndex) cls += ' mcq-option-correct';
-                  else if (idx === result.selectedIndex) cls += ' mcq-option-incorrect';
-                } else if (selected === idx) {
-                  cls += ' mcq-option-selected';
-                }
-                return (
-                  <button
-                    key={idx}
-                    type="button"
-                    className={cls}
-                    onClick={() => selectOption(idx)}
-                    disabled={isLocked}
-                  >
-                    <span className="mcq-option-letter">{String.fromCharCode(65 + idx)}</span>
-                    <span className="mcq-option-text">{opt}</span>
-                  </button>
-                );
-              })}
+              {currentQuestion.options.map((opt, idx) => (
+                <button
+                  key={idx}
+                  type="button"
+                  className={`mcq-option ${selected === idx ? 'mcq-option-selected' : ''}`}
+                  onClick={() => selectOption(idx)}
+                  disabled={testLocked}
+                >
+                  <span className="mcq-option-letter">{String.fromCharCode(65 + idx)}</span>
+                  <span className="mcq-option-text">{opt}</span>
+                </button>
+              ))}
             </div>
-
-            {result && (
-              <div className={`mcq-result-banner ${result.correct ? 'mcq-result-correct' : 'mcq-result-wrong'}`}>
-                {result.correct
-                  ? 'Correct!'
-                  : `Incorrect — the correct answer was ${String.fromCharCode(65 + result.correctIndex)}.`}
-              </div>
-            )}
           </div>
 
           <div className="bottom-nav">
@@ -282,14 +218,6 @@ export default function McqExam({ questions }: { questions: McqQuestion[] }) {
             </button>
             <div className="bottom-nav-right">
               <button
-                className="btn btn-submit"
-                type="button"
-                onClick={openSubmitConfirm}
-                disabled={testLocked || !!result || selected === undefined}
-              >
-                {result ? 'Submitted ✓' : 'Submit Answer'}
-              </button>
-              <button
                 className="btn btn-nav"
                 type="button"
                 onClick={() => setCurrentIndex((i) => Math.min(questions.length - 1, i + 1))}
@@ -302,45 +230,11 @@ export default function McqExam({ questions }: { questions: McqQuestion[] }) {
         </div>
       </div>
 
-      {modal.mode === 'confirm' && (
-        <div className="modal-backdrop">
-          <div className="modal-card">
-            <h2 className="modal-title">Submit Answer?</h2>
-            <p className="modal-body">Are you sure you want to submit this answer? You cannot change it afterwards.</p>
-            <div className="modal-actions">
-              <button className="btn btn-ghost" type="button" onClick={() => setModal({ mode: 'none' })} disabled={submitting}>
-                Cancel
-              </button>
-              <button className="btn btn-submit" type="button" onClick={confirmSubmit} disabled={submitting}>
-                {submitting ? 'Submitting…' : 'Submit'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {modal.mode === 'already' && (
-        <div className="modal-backdrop">
-          <div className="modal-card">
-            <h2 className="modal-title">Already Submitted</h2>
-            <p className="modal-body">This question has already been submitted and cannot be submitted again.</p>
-            <div className="modal-actions">
-              <button className="btn btn-submit" type="button" onClick={() => setModal({ mode: 'none' })}>
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {timesUpVisible && (
         <div className="modal-backdrop">
           <div className="modal-card">
             <h2 className="modal-title">Time's Up</h2>
-            <p className="modal-body">
-              The exam duration has ended. Your selected answers have been automatically submitted and the test is
-              now locked.
-            </p>
+            <p className="modal-body">The exam duration has ended and the test is now locked.</p>
             <div className="modal-actions">
               <button className="btn btn-submit" type="button" onClick={() => setTimesUpVisible(false)}>
                 OK

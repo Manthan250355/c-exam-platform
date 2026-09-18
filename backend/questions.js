@@ -9456,8 +9456,10 @@ const questions = [
 ];
 
 // Calculus MCQ (ids 206-255): a third, independent section — quiz format, no
-// code/gcc involved. See mcqQuestions.js. correctIndex is stripped below and
-// only ever checked server-side (POST /api/mcq/:id/submit).
+// code/gcc involved, no instant right/wrong shown while answering. See
+// mcqQuestions.js. correctIndex is stripped from the normal question feed
+// (getPublicQuestions) and only revealed via the separate Answer Key feed
+// (getAnswerKeyData) — the student checks it themselves, not per-question.
 const { mcqQuestions } = require('./mcqQuestions');
 const allQuestions = [...questions, ...mcqQuestions];
 
@@ -9465,8 +9467,15 @@ function getPublicQuestions() {
   return allQuestions.map(({ hiddenTests, correctIndex, ...rest }) => rest);
 }
 
+// For the Answer Key view: same as getPublicQuestions (hiddenTests still
+// stay hidden — students see sample I/O only, not the full grading set) but
+// correctIndex is included for MCQ questions so the key can show it.
+function getAnswerKeyData() {
+  return allQuestions.map(({ hiddenTests, ...rest }) => rest);
+}
+
 function getQuestionById(id) {
   return allQuestions.find((q) => q.id === Number(id));
 }
 
-module.exports = { questions: allQuestions, getPublicQuestions, getQuestionById };
+module.exports = { questions: allQuestions, getPublicQuestions, getAnswerKeyData, getQuestionById };

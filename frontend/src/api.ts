@@ -1,4 +1,4 @@
-import type { AnyQuestion, McqSubmitResponse, RunCodeResponse, RunSamplesResponse, SubmitResponse } from './types';
+import type { AnswerKeyQuestion, AnyQuestion, RunCodeResponse, RunSamplesResponse, SubmitResponse } from './types';
 
 // Default to whatever host the page itself was loaded from (so this works both at
 // http://localhost:5173 on this machine and http://<lan-ip>:5173 from a phone on the
@@ -73,15 +73,8 @@ export async function submitQuestion(
   return asJson<SubmitResponse>(res);
 }
 
-export async function submitMcqAnswer(
-  questionId: number,
-  selectedIndex: number,
-  studentId: string
-): Promise<McqSubmitResponse> {
-  const res = await fetch(`${BASE_URL}/api/mcq/${questionId}/submit`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ selectedIndex, studentId }),
-  });
-  return asJson<McqSubmitResponse>(res);
+export async function fetchAnswerKey(): Promise<AnswerKeyQuestion[]> {
+  const res = await fetch(`${BASE_URL}/api/answer-key`);
+  const data = await asJson<{ questions: AnswerKeyQuestion[] }>(res);
+  return data.questions;
 }
