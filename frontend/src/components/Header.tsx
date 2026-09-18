@@ -19,6 +19,9 @@ interface HeaderProps {
   onFontSizeChange?: (n: number) => void;
   onHome: () => void;
   showFontSize?: boolean;
+  /** Live running score for normal-mode answering (e.g. "3 correct" out of scoreTotal so far). Omit to hide. */
+  scoreCorrect?: number;
+  scoreTotal?: number;
 }
 
 export default function Header({
@@ -37,6 +40,8 @@ export default function Header({
   onFontSizeChange,
   onHome,
   showFontSize = true,
+  scoreCorrect,
+  scoreTotal,
 }: HeaderProps) {
   return (
     <header className="exam-header">
@@ -104,6 +109,14 @@ export default function Header({
             {attemptedCount}/{totalQuestions}
           </span>
         </div>
+        {scoreCorrect !== undefined && scoreTotal !== undefined && (
+          <div className="attempted-block">
+            <span className="attempted-label">Score</span>
+            <span className="attempted-value score-value">
+              {scoreCorrect}/{scoreTotal}
+            </span>
+          </div>
+        )}
       </div>
     </header>
   );

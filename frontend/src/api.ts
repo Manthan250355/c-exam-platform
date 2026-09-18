@@ -1,4 +1,4 @@
-import type { AnswerKeyQuestion, AnyQuestion, RunCodeResponse, RunSamplesResponse, SubmitResponse } from './types';
+import type { AnswerKeyQuestion, AnyQuestion, RunCodeResponse, RunSamplesResponse, ScoreResponse, SubmitResponse } from './types';
 
 // Default to whatever host the page itself was loaded from (so this works both at
 // http://localhost:5173 on this machine and http://<lan-ip>:5173 from a phone on the
@@ -71,6 +71,15 @@ export async function submitQuestion(
     body: JSON.stringify({ code, studentId }),
   });
   return asJson<SubmitResponse>(res);
+}
+
+export async function scoreQuestion(questionId: number, code: string): Promise<ScoreResponse> {
+  const res = await fetch(`${BASE_URL}/api/questions/${questionId}/score`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ code }),
+  });
+  return asJson<ScoreResponse>(res);
 }
 
 export async function fetchAnswerKey(): Promise<AnswerKeyQuestion[]> {

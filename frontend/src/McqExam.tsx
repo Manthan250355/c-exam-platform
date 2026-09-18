@@ -80,6 +80,16 @@ export default function McqExam({ questions }: { questions: McqQuestion[] }) {
     [statusByQuestionId]
   );
 
+  // Live scoring for normal practice mode: how many answered so far are
+  // actually correct, out of how many have been checked at all.
+  const { scoreCorrect, scoreChecked } = useMemo(() => {
+    const values = Object.values(statusByQuestionId);
+    return {
+      scoreCorrect: values.filter((s) => s === 'correct').length,
+      scoreChecked: values.filter((s) => s === 'correct' || s === 'wrong').length,
+    };
+  }, [statusByQuestionId]);
+
   const handleExpire = () => {
     setTestLocked(true);
     setTimesUpVisible(true);
@@ -186,6 +196,8 @@ export default function McqExam({ questions }: { questions: McqQuestion[] }) {
         attemptedCount={attemptedCount}
         onHome={handleHome}
         showFontSize={false}
+        scoreCorrect={scoreCorrect}
+        scoreTotal={scoreChecked}
       />
 
       {fullscreenWarning && (

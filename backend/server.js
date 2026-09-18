@@ -115,8 +115,61 @@ app.post('/api/questions/:id/run-samples', async (req, res) => {
   }
 });
 
-// Submit: compiles once, runs against sample + hidden tests, computes score,
-// and stores the submission. Hidden test input/output is never returned.
+// Shared grading logic: compiles once, runs against every sample + hidden
+// test, and reports pass/fail per test plus an aggregate score. Used by both
+// /submit (persists + blocks duplicates — for normal practice mode) and
+// /score (stateless — for Test mode, where results stay hidden until all 30
+// questions are graded together at the end).
+async function gradeAgainstAllTests(question, code) {
+  const compiled = await compileOnly(code);
+  const allTests = [
+    ...question.sampleTests.map((t, i) => ({ ...t, kind: 'sample', label: `Test Case ${i + 1}` })),
+    ...question.hiddenTests.map((t, i) => ({ ...t, kind: 'hidden', label: `Hidden Test ${i + 1}` })),
+  ];
+
+  if (!compiled.success) {
+    await cleanupDir(compiled.dir);
+    return {
+      compile: { success: false, output: compiled.output },
+      results: allTests.map((t) => ({ label: t.label, kind: t.kind, passed: false })),
+      score: { passed: 0, total: allTests.length, percentage: 0 },
+    };
+  }
+
+  const results = [];
+  for (const t of allTests) {
+    const run = await runOnce(compiled.exePath, compiled.dir, t.input);
+    const passed =
+      !run.timedOut &&
+      !run.outputExceeded &&
+      run.exitCode === 0 &&
+      normalizeOutput(run.stdout) === normalizeOutput(t.expectedOutput);
+    results.push({
+      label: t.label,
+      kind: t.kind,
+      passed,
+      // sample test detail is safe to reveal; hidden tests stay opaque
+      input: t.kind === 'sample' ? t.input : undefined,
+      expectedOutput: t.kind === 'sample' ? t.expectedOutput : undefined,
+      actualOutput: t.kind === 'sample' ? run.stdout : undefined,
+    });
+  }
+  await cleanupDir(compiled.dir);
+
+  const passedCount = results.filter((r) => r.passed).length;
+  return {
+    compile: { success: true, output: compiled.output },
+    results,
+    score: {
+      passed: passedCount,
+      total: allTests.length,
+      percentage: Math.round((passedCount / allTests.length) * 100),
+    },
+  };
+}
+
+// Submit: grades once, then persists the result and blocks re-submission —
+// this is the normal-mode, "counts for real" submission.
 app.post('/api/questions/:id/submit', async (req, res) => {
   const question = getQuestionById(req.params.id);
   if (!question) return res.status(404).json({ error: 'Unknown question id' });
@@ -136,62 +189,41 @@ app.post('/api/questions/:id/submit', async (req, res) => {
   }
 
   try {
-    const compiled = await compileOnly(code);
-    const allTests = [
-      ...question.sampleTests.map((t, i) => ({ ...t, kind: 'sample', label: `Test Case ${i + 1}` })),
-      ...question.hiddenTests.map((t, i) => ({ ...t, kind: 'hidden', label: `Hidden Test ${i + 1}` })),
-    ];
-
-    if (!compiled.success) {
-      const record = {
-        questionId: question.id,
-        studentId: studentId || 'anonymous',
-        code,
-        compile: { success: false, output: compiled.output },
-        results: allTests.map((t) => ({ label: t.label, kind: t.kind, passed: false })),
-        score: { passed: 0, total: allTests.length, percentage: 0 },
-        submittedAt: new Date().toISOString(),
-      };
-      submissions.set(key, record);
-      return res.json(record);
-    }
-
-    const results = [];
-    for (const t of allTests) {
-      const run = await runOnce(compiled.exePath, compiled.dir, t.input);
-      const passed =
-        !run.timedOut &&
-        !run.outputExceeded &&
-        run.exitCode === 0 &&
-        normalizeOutput(run.stdout) === normalizeOutput(t.expectedOutput);
-      results.push({
-        label: t.label,
-        kind: t.kind,
-        passed,
-        // sample test detail is safe to reveal; hidden tests stay opaque
-        input: t.kind === 'sample' ? t.input : undefined,
-        expectedOutput: t.kind === 'sample' ? t.expectedOutput : undefined,
-        actualOutput: t.kind === 'sample' ? run.stdout : undefined,
-      });
-    }
-    await cleanupDir(compiled.dir);
-
-    const passedCount = results.filter((r) => r.passed).length;
+    const graded = await gradeAgainstAllTests(question, code);
     const record = {
       questionId: question.id,
       studentId: studentId || 'anonymous',
       code,
-      compile: { success: true, output: compiled.output },
-      results,
-      score: {
-        passed: passedCount,
-        total: allTests.length,
-        percentage: Math.round((passedCount / allTests.length) * 100),
-      },
+      ...graded,
       submittedAt: new Date().toISOString(),
     };
     submissions.set(key, record);
     res.json(record);
+  } catch (err) {
+    res.status(500).json({ error: 'Internal sandbox error', detail: err.message });
+  }
+});
+
+// Score: same grading as /submit, but stateless — no persistence, no
+// duplicate-blocking, and no "already submitted" concept. Used only by Test
+// mode, which grades all 30 questions together at the very end rather than
+// revealing pass/fail as the student goes.
+app.post('/api/questions/:id/score', async (req, res) => {
+  const question = getQuestionById(req.params.id);
+  if (!question) return res.status(404).json({ error: 'Unknown question id' });
+  if (question.type === 'mcq') return res.status(400).json({ error: 'This is an MCQ question and does not use this endpoint' });
+  const { code } = req.body || {};
+  if (typeof code !== 'string' || !code.trim()) {
+    return res.json({
+      compile: { success: false, output: 'No code was written for this question.' },
+      results: [],
+      score: { passed: 0, total: question.sampleTests.length + question.hiddenTests.length, percentage: 0 },
+    });
+  }
+
+  try {
+    const graded = await gradeAgainstAllTests(question, code);
+    res.json({ questionId: question.id, ...graded });
   } catch (err) {
     res.status(500).json({ error: 'Internal sandbox error', detail: err.message });
   }

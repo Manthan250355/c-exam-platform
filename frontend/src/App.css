@@ -238,6 +238,10 @@
   color: var(--accent-dark);
 }
 
+.score-value {
+  color: var(--green);
+}
+
 .fullscreen-warning-banner {
   background: var(--red-bg);
   color: var(--red);
@@ -1146,19 +1150,19 @@
 
 .section-picker-item {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 16px 18px;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 18px;
   border-radius: 10px;
   border: 1px solid var(--border-strong);
   background: #fff;
-  cursor: pointer;
   text-align: left;
 }
 
-.section-picker-item:hover {
-  border-color: var(--accent);
-  background: var(--accent-bg);
+.section-picker-item-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
 
 .section-picker-name {
@@ -1312,6 +1316,15 @@
 .section-picker-item-key {
   border-style: dashed;
   background: #fafafa;
+  cursor: pointer;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.section-picker-item-key:hover {
+  border-color: var(--accent);
+  background: var(--accent-bg);
 }
 
 .answer-key-root {
@@ -1449,6 +1462,62 @@
 .answer-key-option-correct {
   color: var(--green);
   font-weight: 700;
+}
+
+.answer-key-option-wrong-pick {
+  color: var(--red);
+  font-weight: 700;
+  text-decoration: line-through;
+}
+
+/* ---------- Test mode (30-question, hidden-until-end) ---------- */
+
+.test-score-banner {
+  background: var(--panel-bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 28px;
+  text-align: center;
+}
+
+.test-score-number {
+  font-size: 40px;
+  font-weight: 800;
+  color: var(--accent-dark);
+}
+
+.test-score-percent {
+  margin-top: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.section-picker-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.section-picker-action-btn {
+  flex: 1;
+  padding: 8px 12px;
+  border-radius: 7px;
+  border: 1px solid var(--border-strong);
+  background: #fff;
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+  color: var(--text-primary);
+}
+
+.section-picker-action-btn:hover {
+  border-color: var(--accent);
+  background: var(--accent-bg);
+}
+
+.section-picker-action-btn-test {
+  color: var(--accent-dark);
+  border-color: var(--accent-border);
 }
 
 .answer-key-coding-list {

@@ -9455,13 +9455,14 @@ const questions = [
   }
 ];
 
-// Calculus MCQ (ids 206-255): a third, independent section — quiz format, no
-// code/gcc involved, no instant right/wrong shown while answering. See
-// mcqQuestions.js. correctIndex is stripped from the normal question feed
-// (getPublicQuestions) and only revealed via the separate Answer Key feed
-// (getAnswerKeyData) — the student checks it themselves, not per-question.
+// Calculus MCQ (ids 206-255) and CAT-1 Partial Derivatives (ids 256-368):
+// quiz-format sections, no code/gcc involved. correctIndex is stripped from
+// the normal question feed (getPublicQuestions) — clicking an option checks
+// it live via POST /api/mcq/:id/check instead — and only otherwise revealed
+// via the separate Answer Key feed (getAnswerKeyData).
 const { mcqQuestions } = require('./mcqQuestions');
-const allQuestions = [...questions, ...mcqQuestions];
+const { pdMcqQuestions } = require('./pdMcqQuestions');
+const allQuestions = [...questions, ...mcqQuestions, ...pdMcqQuestions];
 
 function getPublicQuestions() {
   return allQuestions.map(({ hiddenTests, correctIndex, ...rest }) => rest);

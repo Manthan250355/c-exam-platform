@@ -101,6 +101,16 @@ export interface SubmitResponse {
   submittedAt: string;
 }
 
+// Stateless grading result from POST /api/questions/:id/score — same grading
+// as SubmitResponse but with no persistence/dedup, used only by Test mode,
+// which grades all 30 questions together at the end.
+export interface ScoreResponse {
+  questionId: number;
+  compile: CompileResult;
+  results: SubmitResultItem[];
+  score: { passed: number; total: number; percentage: number };
+}
+
 export type QuestionStatus =
   | 'unattempted'
   | 'attempted'

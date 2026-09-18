@@ -109,6 +109,14 @@ export default function Exam({ questions }: { questions: Question[] }) {
     [statusByQuestionId]
   );
 
+  // Live scoring for normal practice mode: fully-correct submissions out of
+  // however many questions have actually been submitted so far.
+  const scoreCorrect = useMemo(
+    () => Object.values(submittedByQuestion).filter((r) => r.score.percentage === 100).length,
+    [submittedByQuestion]
+  );
+  const scoreSubmitted = Object.keys(submittedByQuestion).length;
+
   const handleExpire = () => {
     setTestLocked(true);
     setTimesUpVisible(true);
@@ -301,6 +309,8 @@ export default function Exam({ questions }: { questions: Question[] }) {
         fontSize={fontSize}
         onFontSizeChange={setFontSize}
         onHome={handleHome}
+        scoreCorrect={scoreCorrect}
+        scoreTotal={scoreSubmitted}
       />
 
       {fullscreenWarning && (
