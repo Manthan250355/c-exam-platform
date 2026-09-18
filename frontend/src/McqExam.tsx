@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Header from './components/Header';
 import Sidebar from './components/Sidebar';
-import { checkHealth } from './api';
+import { checkHealth, checkMcqAnswer } from './api';
 import { useCountdown, formatHMS } from './useCountdown';
 import type { McqQuestion, QuestionStatus } from './types';
 
@@ -12,6 +12,12 @@ const STUDENT_ID = '2610992624';
 // is standard exam pacing for a single-concept multiple-choice question.
 const SECONDS_PER_QUESTION = 60;
 
+interface CheckedAnswer {
+  selectedIndex: number;
+  correctIndex: number;
+  correct: boolean;
+}
+
 export default function McqExam({ questions }: { questions: McqQuestion[] }) {
   const examDurationSeconds = questions.length * SECONDS_PER_QUESTION;
 
@@ -20,10 +26,12 @@ export default function McqExam({ questions }: { questions: McqQuestion[] }) {
   const [timesUpVisible, setTimesUpVisible] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(0);
 
-  // Selecting an option just records the pick — no correctness check happens
-  // here at all. The student compares against the separate Answer Key
-  // section themselves, same as marking a printed exam paper.
-  const [selectedByQuestion, setSelectedByQuestion] = useState<Record<number, number>>({});
+  // Clicking an option immediately checks it against the backend and reveals
+  // correct/incorrect right there — no separate submit step. Re-clicking a
+  // different option re-checks and updates the reveal (this is a practice
+  // tool, not a locked graded attempt).
+  const [checkedByQuestion, setCheckedByQuestion] = useState<Record<number, CheckedAnswer>>({});
+  const [checkingId, setCheckingId] = useState<number | null>(null);
   const [statusByQuestionId, setStatusByQuestionId] = useState<Record<number, QuestionStatus>>(() => {
     const initial: Record<number, QuestionStatus> = {};
     questions.forEach((q) => { initial[q.id] = 'unattempted'; });
@@ -94,10 +102,21 @@ export default function McqExam({ questions }: { questions: McqQuestion[] }) {
     setCurrentIndex(idx);
   }
 
-  function selectOption(optionIndex: number) {
-    if (!currentQuestion || testLocked) return;
-    setSelectedByQuestion((prev) => ({ ...prev, [currentQuestion.id]: optionIndex }));
-    setStatusByQuestionId((prev) => (prev[currentQuestion.id] === 'unattempted' ? { ...prev, [currentQuestion.id]: 'attempted' } : prev));
+  async function selectOption(optionIndex: number) {
+    if (!currentQuestion || testLocked || checkingId === currentQuestion.id) return;
+    setCheckingId(currentQuestion.id);
+    try {
+      const result = await checkMcqAnswer(currentQuestion.id, optionIndex);
+      setCheckedByQuestion((prev) => ({
+        ...prev,
+        [currentQuestion.id]: { selectedIndex: result.selectedIndex, correctIndex: result.correctIndex, correct: result.correct },
+      }));
+      setStatusByQuestionId((prev) => ({ ...prev, [currentQuestion.id]: result.correct ? 'correct' : 'wrong' }));
+    } catch {
+      /* backend unreachable — leave unanswered rather than show a wrong reveal */
+    } finally {
+      setCheckingId(null);
+    }
   }
 
   function handleHome() {
@@ -138,8 +157,7 @@ export default function McqExam({ questions }: { questions: McqQuestion[] }) {
           </div>
           <p className="start-note">
             The exam will enter full-screen mode. Exiting full-screen during the test will be recorded as a warning.
-            Selecting an option records your answer — it does not tell you whether it's correct. Check your answers
-            afterwards from the <strong>Answer Key</strong> on the question-set screen.
+            Click an option to see immediately whether it's correct ({SECONDS_PER_QUESTION}s allotted per question).
           </p>
           <button className="btn btn-submit start-btn" type="button" onClick={handleStart}>
             Enter Full Screen &amp; Start Test
@@ -149,7 +167,8 @@ export default function McqExam({ questions }: { questions: McqQuestion[] }) {
     );
   }
 
-  const selected = selectedByQuestion[currentQuestion.id];
+  const checked = checkedByQuestion[currentQuestion.id];
+  const isChecking = checkingId === currentQuestion.id;
 
   return (
     <div className="exam-root">
@@ -192,19 +211,36 @@ export default function McqExam({ questions }: { questions: McqQuestion[] }) {
             </h1>
 
             <div className="mcq-options">
-              {currentQuestion.options.map((opt, idx) => (
-                <button
-                  key={idx}
-                  type="button"
-                  className={`mcq-option ${selected === idx ? 'mcq-option-selected' : ''}`}
-                  onClick={() => selectOption(idx)}
-                  disabled={testLocked}
-                >
-                  <span className="mcq-option-letter">{String.fromCharCode(65 + idx)}</span>
-                  <span className="mcq-option-text">{opt}</span>
-                </button>
-              ))}
+              {currentQuestion.options.map((opt, idx) => {
+                let cls = 'mcq-option';
+                if (checked) {
+                  if (idx === checked.correctIndex) cls += ' mcq-option-correct';
+                  else if (idx === checked.selectedIndex) cls += ' mcq-option-incorrect';
+                }
+                return (
+                  <button
+                    key={idx}
+                    type="button"
+                    className={cls}
+                    onClick={() => selectOption(idx)}
+                    disabled={testLocked || isChecking}
+                  >
+                    <span className="mcq-option-letter">{String.fromCharCode(65 + idx)}</span>
+                    <span className="mcq-option-text">{opt}</span>
+                  </button>
+                );
+              })}
             </div>
+
+            {isChecking && <p className="console-placeholder">Checking…</p>}
+
+            {checked && (
+              <div className={`mcq-result-banner ${checked.correct ? 'mcq-result-correct' : 'mcq-result-wrong'}`}>
+                {checked.correct
+                  ? 'Correct!'
+                  : `Incorrect — the correct answer is ${String.fromCharCode(65 + checked.correctIndex)}.`}
+              </div>
+            )}
           </div>
 
           <div className="bottom-nav">

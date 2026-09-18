@@ -197,6 +197,29 @@ app.post('/api/questions/:id/submit', async (req, res) => {
   }
 });
 
+// MCQ check: click an option, see instantly whether it's correct. No
+// submission record, no locking, no duplicate-prevention — this is a
+// practice/self-check interaction, not a graded submission. correctIndex is
+// still never sent by GET /api/questions; it's only revealed here, per
+// question, once the student actually picks an answer for it.
+app.post('/api/mcq/:id/check', (req, res) => {
+  const question = getQuestionById(req.params.id);
+  if (!question) return res.status(404).json({ error: 'Unknown question id' });
+  if (question.type !== 'mcq') return res.status(400).json({ error: 'This is not an MCQ question' });
+
+  const { selectedIndex } = req.body || {};
+  if (typeof selectedIndex !== 'number' || selectedIndex < 0 || selectedIndex > 3) {
+    return res.status(400).json({ error: 'selectedIndex (0-3) is required' });
+  }
+
+  res.json({
+    questionId: question.id,
+    selectedIndex,
+    correctIndex: question.correctIndex,
+    correct: selectedIndex === question.correctIndex,
+  });
+});
+
 app.listen(PORT, () => {
   console.log(`C exam backend listening on http://localhost:${PORT}`);
   console.log(`Using gcc: ${GCC_PATH}`);

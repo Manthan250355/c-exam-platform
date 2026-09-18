@@ -6,6 +6,7 @@ import type { AnswerKeyQuestion } from './types';
 export default function AnswerKeyView({ onBack }: { onBack: () => void }) {
   const [questions, setQuestions] = useState<AnswerKeyQuestion[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<string | null>(null);
 
   useEffect(() => {
     fetchAnswerKey()
@@ -23,6 +24,10 @@ export default function AnswerKeyView({ onBack }: { onBack: () => void }) {
     return Array.from(bySection.entries());
   }, [questions]);
 
+  // Default to the first section once data loads.
+  const currentSectionName = activeTab ?? sections[0]?.[0] ?? null;
+  const currentSection = sections.find(([name]) => name === currentSectionName);
+
   return (
     <div className="answer-key-root">
       <header className="answer-key-header">
@@ -33,19 +38,30 @@ export default function AnswerKeyView({ onBack }: { onBack: () => void }) {
         <div className="answer-key-header-spacer" />
       </header>
 
+      {sections.length > 0 && (
+        <div className="answer-key-tabs">
+          {sections.map(([name, qs]) => (
+            <button
+              key={name}
+              type="button"
+              className={`answer-key-tab ${name === currentSectionName ? 'answer-key-tab-active' : ''}`}
+              onClick={() => setActiveTab(name)}
+            >
+              {name} <span className="answer-key-tab-count">{qs.length}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
       <div className="answer-key-body">
         {error && <p className="fatal-error-hint">{error}</p>}
         {!questions && !error && <p className="console-placeholder">Loading answer key…</p>}
 
-        {sections.map(([sectionName, qs]) => (
-          <section key={sectionName} className="answer-key-section">
-            <h2 className="answer-key-section-title">
-              {sectionName} <span className="answer-key-section-count">({qs.length} questions)</span>
-            </h2>
-
-            {isMcqQuestion(qs[0]) ? (
+        {currentSection && (
+          <section className="answer-key-section">
+            {isMcqQuestion(currentSection[1][0]) ? (
               <div className="answer-key-mcq-list">
-                {qs.map((q, idx) => {
+                {currentSection[1].map((q, idx) => {
                   const mcq = q as AnswerKeyQuestion & { question: string; options: string[]; correctIndex: number; topic: string };
                   return (
                     <div key={q.id} className="answer-key-mcq-item">
@@ -66,7 +82,7 @@ export default function AnswerKeyView({ onBack }: { onBack: () => void }) {
               </div>
             ) : (
               <div className="answer-key-coding-list">
-                {qs.map((q, idx) => {
+                {currentSection[1].map((q, idx) => {
                   const coding = q as AnswerKeyQuestion & { title: string; sampleTests: { input: string; expectedOutput: string }[] };
                   return (
                     <div key={q.id} className="answer-key-coding-item">
@@ -93,7 +109,7 @@ export default function AnswerKeyView({ onBack }: { onBack: () => void }) {
               </div>
             )}
           </section>
-        ))}
+        )}
       </div>
     </div>
   );

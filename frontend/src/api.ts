@@ -78,3 +78,19 @@ export async function fetchAnswerKey(): Promise<AnswerKeyQuestion[]> {
   const data = await asJson<{ questions: AnswerKeyQuestion[] }>(res);
   return data.questions;
 }
+
+export interface McqCheckResponse {
+  questionId: number;
+  selectedIndex: number;
+  correctIndex: number;
+  correct: boolean;
+}
+
+export async function checkMcqAnswer(questionId: number, selectedIndex: number): Promise<McqCheckResponse> {
+  const res = await fetch(`${BASE_URL}/api/mcq/${questionId}/check`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ selectedIndex }),
+  });
+  return asJson<McqCheckResponse>(res);
+}
